@@ -160,7 +160,9 @@ Behavior (mirrors C++ `DeleteCredentialAsync`, `windows_hello_repository_impl.cp
 1. Availability pre-check as above.
 2. `KeyCredentialManager::DeleteAsync(tag)` → `.join()`.
 3. Success → confirmation on stderr, exit 0. WinRT error (incl. key-not-found hresult) →
-   descriptive stderr message, exit 7.
+   descriptive stderr message, exit 8 (per the §6 table row for other WinRT hresults;
+   §5.3 previously said exit 7 — that conflicted with §6 where 7 is `UserPrefersPassword`;
+   resolved to exit 8, matching the normative §6 table and verified in manual testing).
 
 ### 5.4 Global
 
