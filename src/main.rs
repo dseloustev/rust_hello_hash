@@ -1,4 +1,5 @@
 mod hash;
+mod hello;
 
 use clap::{Parser, Subcommand};
 
@@ -28,13 +29,6 @@ enum Command {
 }
 
 #[derive(Debug)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "task 2 (WinRT layer) constructs the remaining variants"
-    )
-)]
 enum CliError {
     UserCanceled,
     KeyNotFound,
@@ -76,12 +70,23 @@ impl CliError {
     }
 }
 
+impl From<windows::core::Error> for CliError {
+    fn from(err: windows::core::Error) -> Self {
+        CliError::Unknown(err.message().to_string())
+    }
+}
+
 fn main() {
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
+        Err(err) if err.use_stderr() => {
+            let cli_err = CliError::Usage(err.to_string());
+            eprint!("{}", cli_err.message());
+            std::process::exit(cli_err.exit_code());
+        }
         Err(err) => {
-            err.print().expect("print clap error");
-            std::process::exit(64);
+            print!("{err}");
+            std::process::exit(0);
         }
     };
     if let Err(err) = run(cli.command) {
@@ -92,15 +97,21 @@ fn main() {
 
 fn run(command: Command) -> Result<(), CliError> {
     match command {
-        Command::Sign { .. } => Err(CliError::Unknown(
-            "not implemented: WinRT layer (task 2)".into(),
-        )),
-        Command::GenerateKey { .. } => Err(CliError::Unknown(
-            "not implemented: WinRT layer (task 2)".into(),
-        )),
-        Command::DeleteKey { .. } => Err(CliError::Unknown(
-            "not implemented: WinRT layer (task 2)".into(),
-        )),
+        Command::Sign { challenge, tag } => {
+            let signature = hello::sign(&tag, &challenge)?;
+            println!("{}", hash::sha256_hex(&signature));
+            Ok(())
+        }
+        Command::GenerateKey { tag } => {
+            hello::create_credential(&tag)?;
+            eprintln!("Key credential \"{tag}\" created.");
+            Ok(())
+        }
+        Command::DeleteKey { tag } => {
+            hello::delete_credential(&tag)?;
+            eprintln!("Key credential \"{tag}\" deleted.");
+            Ok(())
+        }
     }
 }
 
