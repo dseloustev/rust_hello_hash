@@ -1,3 +1,4 @@
+mod debug_log;
 mod hash;
 mod hello;
 
@@ -101,7 +102,10 @@ fn run(command: Command) -> Result<(), CliError> {
     match command {
         Command::Sign { challenge, tag } => {
             let signature = hello::sign(&tag, &challenge)?;
-            println!("{}", hash::sha256_hex(&signature));
+            debug_log::log_signature("sign", &tag, &signature);
+            let digest = hash::sha256_digest(&signature);
+            debug_log::log_key_hash(&digest);
+            println!("{}", hash::hex_encode(&digest));
             Ok(())
         }
         Command::GenerateKey { tag } => {

@@ -132,7 +132,18 @@ Behavior:
 6. If operation status ≠ `Success`, exit per §7 (e.g. `UserCanceled` → exit 2).
 7. Extract signature bytes:
    `CryptographicBuffer::CopyToByteArray(result.Result()?, &mut Array::<u8>::new())`.
-8. `Sha256::digest(&bytes)` → print as lowercase hex + `\n` to stdout. Exit 0.
+8. Print two `[bio-debug]` lines to stdout (always on, mirroring the plugin's
+   `debug_log.cpp` format; the signature is hashed exactly once and both debug values
+   derive from the same digest):
+   ```
+   [bio-debug] HH:MM:SS.mmm op=sign tag=<tag> sig=<middle 32 hex chars of signature hex>
+   [bio-debug] HH:MM:SS.mmm key=<middle 32 hex chars of SHA-256 hex>
+   ```
+   "Middle 32" follows the plugin's `SliceMiddle`: empty → `<empty>`, length ≤ 32 → whole
+   string, otherwise `hex[(len-32)/2 .. (len-32)/2+32]`. Timestamps are local time via
+   `GetLocalTime`. On failure (steps 1–6), nothing is printed to stdout.
+9. `Sha256::digest(&bytes)` → print as lowercase hex + `\n` to stdout. Exit 0.
+   This is the FINAL stdout line, unchanged from before (scripts may consume it).
 
 ### 5.2 `generate-key`
 
@@ -273,7 +284,9 @@ hello-hash/
     ├── main.rs        # CLI parsing (clap), exit-code dispatch, top-level error type
     ├── hello.rs       # Windows Hello operations: availability check, open, create,
     │                  #   delete, sign (all WinRT calls live here)
-    └── hash.rs        # sha256_hex(bytes: &[u8]) -> String  (pure, unit-testable)
+    ├── hash.rs        # sha256_digest(bytes: &[u8]) -> [u8; 32], hex_encode (pure,
+    │                  #   unit-testable)
+    └── debug_log.rs   # [bio-debug] line format (slice_middle, timestamp, log_* wrappers)
 ```
 
 - `hello.rs` exposes a small facade, e.g.:
@@ -302,14 +315,17 @@ Windows Hello prompts cannot be automated; the plan is split accordingly.
 
 1. `hello-hash generate-key` → enrollment prompt → success message.
 2. `hello-hash generate-key` again → exit 4, "already exists".
-3. `hello-hash sign` → prompt → 64-char hex digest on stdout, nothing else.
+3. `hello-hash sign` → prompt → three stdout lines: two `[bio-debug]` lines (op=sign with
+   the `sig=` slice, then the `key=` slice), then the 64-char hex digest as the final line.
 4. `hello-hash sign` again (same defaults) → **identical digest** (R8 determinism).
 5. `hello-hash sign "different challenge"` → different digest.
 6. `hello-hash generate-key --tag test-key-tag` + `hello-hash sign --tag test-key-tag` →
    different digest than step 3 (different key).
 7. Cancel the prompt at step 3-style run → exit 2, "user canceled".
 8. `hello-hash delete-key` → success; `hello-hash sign` → exit 3, "key credential not found".
-9. `hello-hash sign | xxd -r -p | ...` — stdout is exactly 65 bytes (digest + `\n`).
+9. `hello-hash sign | tail -1 | xxd -r -p | ...` — the final stdout line is exactly 65 bytes
+   (digest + `\n`); the two preceding `[bio-debug]` lines have varying content (timestamps,
+   per-run signature).
 
 **Consistency with `mfa_locker` (optional but recommended):** temporarily instrument the
 example app (or use the tpm_test screen with tag `mfa_demo_bio_key`) to print its SHA-256
