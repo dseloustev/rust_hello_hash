@@ -64,7 +64,9 @@ impl CliError {
             }
             CliError::SecurityDeviceLocked => "security device is locked.".to_string(),
             CliError::UserPrefersPassword => "user prefers password.".to_string(),
-            CliError::Unknown(description) => format!("{description}."),
+            CliError::Unknown(description) => {
+                format!("{}.", description.trim_end_matches('.'))
+            }
             CliError::Usage(usage) => usage.clone(),
         }
     }
@@ -254,5 +256,13 @@ mod tests {
             "user prefers password."
         );
         assert_eq!(CliError::Unknown("boom".into()).message(), "boom.");
+    }
+
+    #[test]
+    fn test_unknown_message_no_double_period() {
+        assert_eq!(
+            CliError::Unknown("some error.".into()).message(),
+            "some error."
+        );
     }
 }
