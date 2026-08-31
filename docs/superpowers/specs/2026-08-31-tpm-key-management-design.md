@@ -43,8 +43,9 @@ here does not appear in Windows Hello, and vice versa.
 - **T2 — Create collision:** `NTE_EXISTS` from `NCryptCreatePersistedKey` → exit 4,
   message `TPM key already exists.` (mirrors `error_key_already_exists`).
 - **T3 — Delete:** `tpm delete-key <NAME>` opens the key with `NCryptOpenKey`, then
-  deletes it with `NCryptDeleteKey`. `NTE_NO_KEY` from either call → exit 3, message
-  `TPM key not found.` (mirrors `error_key_not_found`).
+  deletes it with `NCryptDeleteKey`. `NTE_NO_KEY` (or `NTE_BAD_KEYSET` from
+  `NCryptOpenKey` on TPMs that return it for missing keys) from either call → exit 3,
+  message `TPM key not found.` (mirrors `error_key_not_found`).
 - **T4 — Delete frees the handle:** on success, `NCryptDeleteKey` has already freed
   the key handle; the implementation must not free it again (C++ :152–154).
 - **T5 — List:** `tpm list-keys` enumerates keys via `NCryptEnumKeys` until
@@ -112,7 +113,7 @@ behavior and exit code 64 for usage errors follow the existing global rules
 
 | Code | Condition | stderr message (prefix) |
 |------|-----------|-------------------------|
-| 3 | `NTE_NO_KEY` from `NCryptOpenKey`/`NCryptDeleteKey` (delete-key) | `Error: TPM key not found.` |
+| 3 | `NTE_NO_KEY` / `NTE_BAD_KEYSET` (missing-key) from `NCryptOpenKey`, `NTE_NO_KEY` from `NCryptDeleteKey` (delete-key) | `Error: TPM key not found.` |
 | 4 | `NTE_EXISTS` from `NCryptCreatePersistedKey` (create-key) | `Error: TPM key already exists.` |
 | 5 | `NCryptOpenStorageProvider` failure (no TPM / provider unavailable) | `Error: TPM is not available (NCryptOpenStorageProvider failed: 0x...).` |
 | 8 | Any other NCrypt failure (`NCryptCreatePersistedKey`, `NCryptFinalizeKey`, `NCryptOpenKey`, `NCryptDeleteKey`, `NCryptEnumKeys`) | `Error: <call> failed: 0x<HRESULT>.` |
