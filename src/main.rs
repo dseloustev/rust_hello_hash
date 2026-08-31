@@ -1,6 +1,7 @@
 mod debug_log;
 mod hash;
 mod hello;
+mod tpm;
 
 use clap::{Parser, Subcommand};
 

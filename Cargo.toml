@@ -13,6 +13,7 @@ windows = { version = "0.62.2", features = [
     "Security_Cryptography",      # CryptographicBuffer, BinaryStringEncoding
     "Storage_Streams",            # IBuffer (gates RequestSignAsync / Result())
     "Win32_System_SystemInformation", # GetLocalTime / SYSTEMTIME (bio-debug timestamps)
+    "Win32_Security_Cryptography",    # NCrypt: TPM key create/delete/list
 ] }
 
 [profile.release]
