@@ -2,8 +2,8 @@ use windows::core::{Error, HSTRING, Owned, PWSTR};
 use windows::Win32::Foundation::{NTE_EXISTS, NTE_NO_KEY, NTE_NO_MORE_ITEMS};
 use windows::Win32::Security::Cryptography::{
     CERT_KEY_SPEC, MS_PLATFORM_CRYPTO_PROVIDER, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
-    NCRYPT_RSA_ALGORITHM, NCryptCreatePersistedKey, NCryptDeleteKey, NCryptFinalizeKey,
-    NCryptOpenKey, NCryptOpenStorageProvider,
+    NCRYPT_RSA_ALGORITHM, NCryptCreatePersistedKey, NCryptDeleteKey, NCryptEnumKeys,
+    NCryptFinalizeKey, NCryptFreeBuffer, NCryptKeyName, NCryptOpenKey, NCryptOpenStorageProvider,
 };
 
 use crate::CliError;
@@ -107,11 +107,61 @@ pub fn delete_key(name: &str) -> Result<(), CliError> {
     Ok(())
 }
 
+pub fn list_keys() -> Result<Vec<TpmKeyInfo>, CliError> {
+    let _provider = open_provider()?;
+    let mut keys = Vec::new();
+    let mut key_name: *mut NCryptKeyName = core::ptr::null_mut();
+    let mut enum_state: *mut core::ffi::c_void = core::ptr::null_mut();
+    loop {
+        let status = unsafe {
+            NCryptEnumKeys(
+                *_provider,
+                PWSTR::null(),
+                &mut key_name,
+                &mut enum_state,
+                NCRYPT_FLAGS(0),
+            )
+        };
+        match status {
+            Ok(()) => {
+                if !key_name.is_null() {
+                    unsafe {
+                        keys.push(TpmKeyInfo {
+                            name: pwstr_to_string_lossy((*key_name).pszName),
+                            algorithm: pwstr_to_string_lossy((*key_name).pszAlgid),
+                        });
+                        let _ = NCryptFreeBuffer(key_name.cast());
+                    }
+                    key_name = core::ptr::null_mut();
+                }
+            }
+            Err(e) if e.code() == NTE_NO_MORE_ITEMS => break,
+            Err(e) => {
+                free_enum_state(enum_state, key_name);
+                return Err(ncrypt_failure("NCryptEnumKeys", &e));
+            }
+        }
+    }
+    free_enum_state(enum_state, key_name);
+    Ok(keys)
+}
+
+fn free_enum_state(enum_state: *mut core::ffi::c_void, key_name: *mut NCryptKeyName) {
+    unsafe {
+        if !enum_state.is_null() {
+            let _ = NCryptFreeBuffer(enum_state.cast());
+        }
+        if !key_name.is_null() {
+            let _ = NCryptFreeBuffer(key_name.cast());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use windows::core::HRESULT;
-    use windows::Win32::Foundation::{NTE_FAIL, NTE_NO_MORE_ITEMS};
+    use windows::Win32::Foundation::NTE_FAIL;
 
     #[test]
     fn test_pwstr_to_string_lossy_basic() {
