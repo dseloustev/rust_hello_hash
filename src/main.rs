@@ -28,6 +28,15 @@ enum Command {
         #[arg(long, default_value = "mfa_demo_bio_key")]
         tag: String,
     },
+    #[command(subcommand)]
+    Tpm(TpmCommand),
+}
+
+#[derive(Debug, Subcommand)]
+enum TpmCommand {
+    CreateKey { name: String },
+    DeleteKey { name: String },
+    ListKeys,
 }
 
 #[derive(Debug)]
@@ -130,6 +139,25 @@ fn run(command: Command) -> Result<(), CliError> {
             eprintln!("Key credential \"{tag}\" deleted.");
             Ok(())
         }
+        Command::Tpm(command) => match command {
+            TpmCommand::CreateKey { name } => {
+                tpm::create_key(&name)?;
+                eprintln!("TPM key \"{name}\" created.");
+                Ok(())
+            }
+            TpmCommand::DeleteKey { name } => {
+                tpm::delete_key(&name)?;
+                eprintln!("TPM key \"{name}\" deleted.");
+                Ok(())
+            }
+            TpmCommand::ListKeys => {
+                let keys = tpm::list_keys()?;
+                for key in &keys {
+                    println!("{}", tpm::format_key_line(key));
+                }
+                Ok(())
+            }
+        },
     }
 }
 
@@ -287,6 +315,55 @@ mod tests {
         assert_eq!(CliError::TpmKeyNotFound.exit_code(), 3);
         assert_eq!(CliError::TpmKeyExists.exit_code(), 4);
         assert_eq!(CliError::TpmUnavailable("x".into()).exit_code(), 5);
+    }
+
+    #[test]
+    fn test_tpm_create_key_parses_name() {
+        match parse(&["tpm", "create-key", "my_key"]).expect("tpm create-key must parse") {
+            Command::Tpm(TpmCommand::CreateKey { name }) => assert_eq!(name, "my_key"),
+            other => panic!("expected Tpm(CreateKey), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_tpm_create_key_requires_name() {
+        assert!(parse(&["tpm", "create-key"]).is_err());
+    }
+
+    #[test]
+    fn test_tpm_delete_key_parses_name() {
+        match parse(&["tpm", "delete-key", "my_key"]).expect("tpm delete-key must parse") {
+            Command::Tpm(TpmCommand::DeleteKey { name }) => assert_eq!(name, "my_key"),
+            other => panic!("expected Tpm(DeleteKey), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_tpm_delete_key_requires_name() {
+        assert!(parse(&["tpm", "delete-key"]).is_err());
+    }
+
+    #[test]
+    fn test_tpm_list_keys_parses() {
+        match parse(&["tpm", "list-keys"]).expect("tpm list-keys must parse") {
+            Command::Tpm(TpmCommand::ListKeys) => {}
+            other => panic!("expected Tpm(ListKeys), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_tpm_list_keys_rejects_extra_args() {
+        assert!(parse(&["tpm", "list-keys", "extra"]).is_err());
+    }
+
+    #[test]
+    fn test_tpm_requires_subcommand() {
+        assert!(parse(&["tpm"]).is_err());
+    }
+
+    #[test]
+    fn test_tpm_unknown_subcommand_errors() {
+        assert!(parse(&["tpm", "frobnicate"]).is_err());
     }
 
     #[test]
