@@ -1,10 +1,11 @@
-use windows::core::{Error, HSTRING, Owned, PWSTR};
-use windows::Win32::Foundation::{NTE_EXISTS, NTE_NO_KEY, NTE_NO_MORE_ITEMS};
+use windows::Win32::Foundation::{NTE_BAD_KEYSET, NTE_EXISTS, NTE_NO_KEY, NTE_NO_MORE_ITEMS};
 use windows::Win32::Security::Cryptography::{
-    CERT_KEY_SPEC, MS_PLATFORM_CRYPTO_PROVIDER, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
-    NCRYPT_RSA_ALGORITHM, NCryptCreatePersistedKey, NCryptDeleteKey, NCryptEnumKeys,
-    NCryptFinalizeKey, NCryptFreeBuffer, NCryptKeyName, NCryptOpenKey, NCryptOpenStorageProvider,
+    CERT_KEY_SPEC, MS_PLATFORM_CRYPTO_PROVIDER, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE,
+    NCRYPT_PROV_HANDLE, NCRYPT_RSA_ALGORITHM, NCryptCreatePersistedKey, NCryptDeleteKey,
+    NCryptEnumKeys, NCryptFinalizeKey, NCryptFreeBuffer, NCryptKeyName, NCryptOpenKey,
+    NCryptOpenStorageProvider,
 };
+use windows::core::{Error, HSTRING, Owned, PWSTR};
 
 use crate::CliError;
 
@@ -45,7 +46,7 @@ fn map_create_key_error(err: Error) -> CliError {
 }
 
 fn map_open_key_error(err: Error) -> CliError {
-    if err.code() == NTE_NO_KEY {
+    if err.code() == NTE_NO_KEY || err.code() == NTE_BAD_KEYSET {
         CliError::TpmKeyNotFound
     } else {
         ncrypt_failure("NCryptOpenKey", &err)
@@ -160,8 +161,8 @@ fn free_enum_state(enum_state: *mut core::ffi::c_void, key_name: *mut NCryptKeyN
 #[cfg(test)]
 mod tests {
     use super::*;
-    use windows::core::HRESULT;
     use windows::Win32::Foundation::NTE_FAIL;
+    use windows::core::HRESULT;
 
     #[test]
     fn test_pwstr_to_string_lossy_basic() {
@@ -235,6 +236,14 @@ mod tests {
     fn test_map_open_key_error_no_key() {
         assert!(matches!(
             map_open_key_error(Error::from_hresult(NTE_NO_KEY)),
+            CliError::TpmKeyNotFound
+        ));
+    }
+
+    #[test]
+    fn test_map_open_key_error_bad_keyset() {
+        assert!(matches!(
+            map_open_key_error(Error::from_hresult(NTE_BAD_KEYSET)),
             CliError::TpmKeyNotFound
         ));
     }
