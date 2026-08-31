@@ -2,7 +2,8 @@ use windows::core::{Error, HSTRING, Owned, PWSTR};
 use windows::Win32::Foundation::{NTE_EXISTS, NTE_NO_KEY, NTE_NO_MORE_ITEMS};
 use windows::Win32::Security::Cryptography::{
     CERT_KEY_SPEC, MS_PLATFORM_CRYPTO_PROVIDER, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
-    NCRYPT_RSA_ALGORITHM, NCryptCreatePersistedKey, NCryptFinalizeKey, NCryptOpenStorageProvider,
+    NCRYPT_RSA_ALGORITHM, NCryptCreatePersistedKey, NCryptDeleteKey, NCryptFinalizeKey,
+    NCryptOpenKey, NCryptOpenStorageProvider,
 };
 
 use crate::CliError;
@@ -84,6 +85,25 @@ pub fn create_key(name: &str) -> Result<(), CliError> {
     unsafe { NCryptFinalizeKey(*key, NCRYPT_FLAGS(0)) }
         .map_err(|e| ncrypt_failure("NCryptFinalizeKey", &e))?;
     drop(key);
+    Ok(())
+}
+
+pub fn delete_key(name: &str) -> Result<(), CliError> {
+    let _provider = open_provider()?;
+    let mut key_handle = NCRYPT_KEY_HANDLE::default();
+    let key = unsafe {
+        NCryptOpenKey(
+            *_provider,
+            &mut key_handle,
+            &HSTRING::from(name),
+            CERT_KEY_SPEC(0),
+            NCRYPT_FLAGS(0),
+        )
+        .map_err(map_open_key_error)?;
+        Owned::new(key_handle)
+    };
+    unsafe { NCryptDeleteKey(*key, 0) }.map_err(map_delete_key_error)?;
+    core::mem::forget(key);
     Ok(())
 }
 
