@@ -3,3 +3,5 @@
 /.vscode/
 # br doctor per-run artifacts
 .doctor/
+
+.worktrees/
