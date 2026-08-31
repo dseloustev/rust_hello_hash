@@ -1,5 +1,0 @@
-# Beads Project Configuration
-# issue_prefix: rust_hello_hash
-# default_priority: 2
-# default_type: task
- tm.backend: br
