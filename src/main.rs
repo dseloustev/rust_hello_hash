@@ -39,6 +39,9 @@ enum CliError {
     UserPrefersPassword,
     Unknown(String),
     Usage(String),
+    TpmKeyNotFound,
+    TpmKeyExists,
+    TpmUnavailable(String),
 }
 
 impl CliError {
@@ -52,6 +55,9 @@ impl CliError {
             CliError::UserPrefersPassword => 7,
             CliError::Unknown(_) => 8,
             CliError::Usage(_) => 64,
+            CliError::TpmKeyNotFound => 3,
+            CliError::TpmKeyExists => 4,
+            CliError::TpmUnavailable(_) => 5,
         }
     }
 
@@ -69,6 +75,11 @@ impl CliError {
                 format!("{}.", description.trim_end_matches('.'))
             }
             CliError::Usage(usage) => usage.clone(),
+            CliError::TpmKeyNotFound => "TPM key not found.".to_string(),
+            CliError::TpmKeyExists => "TPM key already exists.".to_string(),
+            CliError::TpmUnavailable(detail) => {
+                format!("TPM is not available ({detail}).")
+            }
         }
     }
 }
@@ -267,6 +278,27 @@ mod tests {
         assert_eq!(
             CliError::Unknown("some error.".into()).message(),
             "some error."
+        );
+    }
+
+    #[test]
+    fn test_tpm_cli_error_exit_codes() {
+        assert_eq!(CliError::TpmKeyNotFound.exit_code(), 3);
+        assert_eq!(CliError::TpmKeyExists.exit_code(), 4);
+        assert_eq!(CliError::TpmUnavailable("x".into()).exit_code(), 5);
+    }
+
+    #[test]
+    fn test_tpm_cli_error_messages() {
+        assert_eq!(CliError::TpmKeyNotFound.message(), "TPM key not found.");
+        assert_eq!(CliError::TpmKeyExists.message(), "TPM key already exists.");
+        assert_eq!(
+            CliError::TpmUnavailable("no TPM".into()).message(),
+            "TPM is not available (no TPM)."
+        );
+        assert_eq!(
+            CliError::Unknown("NCryptEnumKeys failed: 0x8009002A".into()).message(),
+            "NCryptEnumKeys failed: 0x8009002A."
         );
     }
 }
