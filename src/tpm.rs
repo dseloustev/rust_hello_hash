@@ -1,5 +1,9 @@
-use windows::core::{Error, PWSTR};
-use windows::Win32::Foundation::{NTE_EXISTS, NTE_NO_KEY};
+use windows::core::{Error, HSTRING, Owned, PWSTR};
+use windows::Win32::Foundation::{NTE_EXISTS, NTE_NO_KEY, NTE_NO_MORE_ITEMS};
+use windows::Win32::Security::Cryptography::{
+    CERT_KEY_SPEC, MS_PLATFORM_CRYPTO_PROVIDER, NCRYPT_FLAGS, NCRYPT_KEY_HANDLE, NCRYPT_PROV_HANDLE,
+    NCRYPT_RSA_ALGORITHM, NCryptCreatePersistedKey, NCryptFinalizeKey, NCryptOpenStorageProvider,
+};
 
 use crate::CliError;
 
@@ -53,6 +57,34 @@ fn map_delete_key_error(err: Error) -> CliError {
     } else {
         ncrypt_failure("NCryptDeleteKey", &err)
     }
+}
+
+fn open_provider() -> Result<Owned<NCRYPT_PROV_HANDLE>, CliError> {
+    let mut provider = NCRYPT_PROV_HANDLE::default();
+    unsafe { NCryptOpenStorageProvider(&mut provider, MS_PLATFORM_CRYPTO_PROVIDER, 0) }
+        .map_err(provider_unavailable)?;
+    Ok(unsafe { Owned::new(provider) })
+}
+
+pub fn create_key(name: &str) -> Result<(), CliError> {
+    let _provider = open_provider()?;
+    let mut key_handle = NCRYPT_KEY_HANDLE::default();
+    let key = unsafe {
+        NCryptCreatePersistedKey(
+            *_provider,
+            &mut key_handle,
+            NCRYPT_RSA_ALGORITHM,
+            &HSTRING::from(name),
+            CERT_KEY_SPEC(0),
+            NCRYPT_FLAGS(0),
+        )
+        .map_err(map_create_key_error)?;
+        Owned::new(key_handle)
+    };
+    unsafe { NCryptFinalizeKey(*key, NCRYPT_FLAGS(0)) }
+        .map_err(|e| ncrypt_failure("NCryptFinalizeKey", &e))?;
+    drop(key);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -162,6 +194,15 @@ mod tests {
                 assert_eq!(msg, "NCryptDeleteKey failed: 0x80090020");
             }
             other => panic!("expected Unknown, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_open_provider_returns_without_panic() {
+        match open_provider() {
+            Ok(_) => {}
+            Err(CliError::TpmUnavailable(_)) => {}
+            Err(other) => panic!("unexpected error: {other:?}"),
         }
     }
 }
